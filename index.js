@@ -1,61 +1,31 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const { PDFDocument } = require('pdf-lib');
+const express = require('express');
+const app = express();
+const handbookPdf = require('./utils/handbookPdf');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 
-// Manually specify the path to Chrome (if needed)
-const getExecutablePath = async () => {
-  const execPath = process.env.PUPPETEER_EXEC_PATH || '/opt/render/.cache/puppeteer/chrome/linux-135.0.7049.84/chrome-linux64/chrome';
-  return execPath;
-};
+app.use(express.json());
 
-async function handbookPdf(targetUrl) {
-  const executablePath = await getExecutablePath();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath,
-  });
-  const page = await browser.newPage();
+// Update route to the root instead of '/node'
+app.get('/print/handbook', async (req, res) => {
+  const { targetUrl } = req.query;
 
-  await page.setViewport({ width: 794, height: 1123 });
-  await page.goto(targetUrl, { waitUntil: 'networkidle0' });
-  await page.emulateMediaType('screen');
-
-  const sections = await page.$$('#handbook-pages .type-handbook-page');
-  const buffers = [];
-
-  for (let i = 0; i < sections.length; i++) {
-    await page.evaluate((idx) => {
-      document
-        .querySelectorAll('#handbook-pages .type-handbook-page')
-        .forEach((el, j) => (el.style.display = j === idx ? 'block' : 'none'));
-    }, i);
-
-    const buf = await page.pdf({
-      printBackground: true,
-      width: '794px',
-      height: '1123px',
-      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-    });
-    buffers.push(buf);
+  if (!targetUrl || !targetUrl.includes('print=true')) {
+    return res.status(400).json({ error: 'Invalid target URL.' });
   }
 
-  await browser.close();
-
-  const merged = await PDFDocument.create();
-  for (const buf of buffers) {
-    const doc = await PDFDocument.load(buf);
-    const [page] = await merged.copyPages(doc, [0]);
-    merged.addPage(page);
+  try {
+    const { filename, filepath } = await handbookPdf(targetUrl);
+    const url = `/output/${filename}`; // update to `/output/` as a relative URL
+    res.json({ url });
+  } catch (err) {
+    console.error('🔥 PDF generation error:', err);
+    res.status(500).json({ error: 'PDF generation failed.' });
   }
+});
 
-  const finalPdf = await merged.save();
-  const filename = `handbook-${uuidv4()}.pdf`;
-  const filepath = path.join(__dirname, '..', 'output', filename);
+// Serve static files directly from the root for the 'output' folder
+app.use('/output', express.static(path.join(__dirname, 'output')));
 
-  fs.writeFileSync(filepath, finalPdf);
-  return { filename, filepath };
-}
-
-module.exports = handbookPdf;
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ Node app running on port ${PORT}`));

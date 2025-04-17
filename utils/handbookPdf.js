@@ -4,8 +4,18 @@ const { PDFDocument } = require('pdf-lib');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+// Manually specify the path to Chrome (if needed)
+const getExecutablePath = async () => {
+  const execPath = process.env.PUPPETEER_EXEC_PATH || '/opt/render/.cache/puppeteer/chrome/linux-135.0.7049.84/chrome-linux64/chrome';
+  return execPath;
+};
+
 async function handbookPdf(targetUrl) {
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const executablePath = await getExecutablePath();
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    executablePath,
+  });
   const page = await browser.newPage();
 
   await page.setViewport({ width: 794, height: 1123 });
