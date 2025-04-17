@@ -6,9 +6,8 @@ const fs = require('fs');
 
 app.use(express.json());
 
-app.get('/node/print/handbook', async (req, res) => {
-  // res.send('Node PDF API is live at /node/print/handbook!');
-
+// Update route to the root instead of '/node'
+app.get('/print/handbook', async (req, res) => {
   const { targetUrl } = req.query;
 
   if (!targetUrl || !targetUrl.includes('print=true')) {
@@ -17,16 +16,16 @@ app.get('/node/print/handbook', async (req, res) => {
 
   try {
     const { filename, filepath } = await handbookPdf(targetUrl);
-    const url = `/node/output/${filename}`;
+    const url = `/output/${filename}`; // update to `/output/` as a relative URL
     res.json({ url });
   } catch (err) {
-    console.error(err);
+    console.error('🔥 PDF generation error:', err);
     res.status(500).json({ error: 'PDF generation failed.' });
   }
 });
 
-// Serve static files
-app.use('/node/output', express.static(path.join(__dirname, 'output')));
+// Serve static files directly from the root for the 'output' folder
+app.use('/output', express.static(path.join(__dirname, 'output')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Node app running on port ${PORT}`));
