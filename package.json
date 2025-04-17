@@ -7,7 +7,8 @@
     "glob": "^11.0.1",
     "page-flip": "^2.0.7",
     "pdf-lib": "^1.17.1",
-    "puppeteer": "^24.6.0"
+    "puppeteer": "^24.6.0",
+    "uuid": "^11.1.0"
   },
   "puppeteer": {
     "default_browser_revision": "1222029"
