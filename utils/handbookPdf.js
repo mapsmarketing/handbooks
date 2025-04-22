@@ -33,18 +33,21 @@ async function handbookPdf(targetUrl) {
 
   await browser.close();
 
+  // 3) Merge pages into one PDF
   const merged = await PDFDocument.create();
   for (const buf of buffers) {
     const doc = await PDFDocument.load(buf);
-    const [page] = await merged.copyPages(doc, [0]);
-    merged.addPage(page);
+    const [p] = await merged.copyPages(doc, [0]);
+    merged.addPage(p);
   }
 
   const finalPdf = await merged.save();
   const filename = `handbook-${uuidv4()}.pdf`;
-  const filepath = path.join(__dirname, '..', 'output', filename);
-
+  const outDir = path.join(__dirname, '..', 'output');
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+  const filepath = path.join(outDir, filename);
   fs.writeFileSync(filepath, finalPdf);
+
   return { filename, filepath };
 }
 
