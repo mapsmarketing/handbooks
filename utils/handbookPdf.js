@@ -6,15 +6,10 @@ const fs = require('fs');
 const path = require('path');
 
 module.exports = async function generateHandbookPdf(targetUrl) {
-  // 1) Launch bundled Chromium
-  const execPath = await chromium.executablePath;
-  if (!execPath) throw new Error('chromium executable not found');
-
   const browser = await puppeteer.launch({
-    executablePath: execPath,
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    headless: chromium.headless,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true
   });
 
   // 2) Render each page
