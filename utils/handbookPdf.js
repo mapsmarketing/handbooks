@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 module.exports = async function generateHandbookPdf(targetUrl) {
   // 1) Launch system-installed Chrome
   const chrome = await chromeLauncher.launch({
+    chromePath: process.env.CHROME_PATH || undefined,
     chromeFlags: [
       '--headless',
       '--no-sandbox',
