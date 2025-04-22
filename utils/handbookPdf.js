@@ -9,7 +9,8 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   const page = await browser.newPage();
 
   await page.setViewport({ width: 794, height: 1123 });
-  await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 6000 });
+  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForSelector('#handbook-pages .type-handbook-page', { timeout: 10000 });
   await page.emulateMediaType('screen');
 
   const sections = await page.$$('#handbook-pages .type-handbook-page');
