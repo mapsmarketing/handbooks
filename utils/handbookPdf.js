@@ -1,49 +1,48 @@
 const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 const { PDFDocument } = require('pdf-lib');
+const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 
 module.exports = async function generateHandbookPdf(targetUrl) {
-  // 1) Launch the bundled Chromium
+  // 1) Launch bundled Chromium
+  const execPath = await chromium.executablePath;
+  if (!execPath) throw new Error('chromium executable not found');
+
   const browser = await puppeteer.launch({
+    executablePath: execPath,
     args: chromium.args,
     defaultViewport: chromium.defaultViewport,
-    executablePath: await chromium.executablePath,
     headless: chromium.headless,
   });
 
+  // 2) Render each page
   const page = await browser.newPage();
   await page.setViewport({ width: 794, height: 1123 });
   await page.goto(targetUrl, { waitUntil: 'networkidle0' });
   await page.emulateMediaType('screen');
 
-  // 2) Capture each .type-handbook-page individually
   const sections = await page.$$('#handbook-pages .type-handbook-page');
   const buffers = [];
   for (let i = 0; i < sections.length; i++) {
     await page.evaluate(idx => {
       document
         .querySelectorAll('#handbook-pages .type-handbook-page')
-        .forEach((el, j) => {
-          el.style.display = j === idx ? 'block' : 'none';
-        });
+        .forEach((el, j) => el.style.display = j === idx ? 'block' : 'none');
     }, i);
 
-    buffers.push(
-      await page.pdf({
-        printBackground: true,
-        width: '794px',
-        height: '1123px',
-        margin: { top: 0, right: 0, bottom: 0, left: 0 },
-      })
-    );
+    buffers.push(await page.pdf({
+      printBackground: true,
+      width: '794px',
+      height: '1123px',
+      margin: { top: 0, right: 0, bottom: 0, left: 0 }
+    }));
   }
 
   await browser.close();
 
-  // 3) Merge to single PDF
+  // 3) Merge into one PDF
   const merged = await PDFDocument.create();
   for (const buf of buffers) {
     const doc = await PDFDocument.load(buf);
@@ -53,7 +52,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
 
   const finalPdf = await merged.save();
   const filename = `handbook-${uuidv4()}.pdf`;
-  const outDir = path.join(__dirname, '..', 'output');
+  const outDir  = path.join(__dirname, '..', 'output');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
   const filepath = path.join(outDir, filename);
   fs.writeFileSync(filepath, finalPdf);
