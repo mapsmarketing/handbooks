@@ -4,20 +4,22 @@ const { PDFDocument } = require('pdf-lib');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-// Manually specify the path to Chrome (if needed)
-const getExecutablePath = async () => {
-  const execPath = process.env.PUPPETEER_EXEC_PATH || '/opt/render/.cache/puppeteer/chrome/linux-135.0.7049.84/chrome-linux64/chrome';
-  return execPath;
-};
-
 async function handbookPdf(targetUrl) {
-  const executablePath = await getExecutablePath();
   const browser = await puppeteer.launch({
     headless: 'new',
-    executablePath,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ]
   });
+  
   const page = await browser.newPage();
-
   await page.setViewport({ width: 794, height: 1123 });
   await page.goto(targetUrl, { waitUntil: 'networkidle0' });
   await page.emulateMediaType('screen');
@@ -53,6 +55,11 @@ async function handbookPdf(targetUrl) {
   const finalPdf = await merged.save();
   const filename = `handbook-${uuidv4()}.pdf`;
   const filepath = path.join(__dirname, '..', 'output', filename);
+
+  // Ensure output directory exists
+  if (!fs.existsSync(path.join(__dirname, '..', 'output'))) {
+    fs.mkdirSync(path.join(__dirname, '..', 'output'));
+  }
 
   fs.writeFileSync(filepath, finalPdf);
   return { filename, filepath };
