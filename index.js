@@ -14,13 +14,12 @@ app.get('/print/handbook', async (req, res) => {
     const { filename } = await genPdf(targetUrl);
     res.json({ url: `/output/${filename}` });
   } catch (e) {
-    console.error('❌ PDF gen error:', e);
+    console.error('PDF error:', e);
     res.status(500).json({ error: 'PDF generation failed' });
   }
 });
 
-// Serve generated files
 app.use('/output', express.static(path.join(__dirname, 'output')));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`✅ PDF service on port ${PORT}`));

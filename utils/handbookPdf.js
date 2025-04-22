@@ -1,18 +1,17 @@
-const chromium = require('chrome-aws-lambda');
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer');
 const { PDFDocument } = require('pdf-lib');
-const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 module.exports = async function generateHandbookPdf(targetUrl) {
+  // 1) Launch the bundled Chrome
   const browser = await puppeteer.launch({
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    headless: true
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
-  // 2) Render each page
+  // 2) Render each .type-handbook-page
   const page = await browser.newPage();
   await page.setViewport({ width: 794, height: 1123 });
   await page.goto(targetUrl, { waitUntil: 'networkidle0' });
@@ -24,7 +23,9 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     await page.evaluate(idx => {
       document
         .querySelectorAll('#handbook-pages .type-handbook-page')
-        .forEach((el, j) => el.style.display = j === idx ? 'block' : 'none');
+        .forEach((el, j) => {
+          el.style.display = j === idx ? 'block' : 'none';
+        });
     }, i);
 
     buffers.push(await page.pdf({
@@ -37,7 +38,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
 
   await browser.close();
 
-  // 3) Merge into one PDF
+  // 3) Merge pages into one PDF
   const merged = await PDFDocument.create();
   for (const buf of buffers) {
     const doc = await PDFDocument.load(buf);
