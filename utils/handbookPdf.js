@@ -11,31 +11,84 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   const outDir = path.join(__dirname, '..', 'output');
   const screenPath = path.join(outDir, 'debug-screenshot.png');
   const htmlPath = path.join(outDir, 'debug-page.html');
+  const initialScreenPath = path.join(outDir, 'initial-load.png');
+  const failedLoadPath = path.join(outDir, 'failed-load.html');
+
+  // Ensure output directory exists
+  if (!fs.existsSync(outDir)) {
+    fs.mkdirSync(outDir, { recursive: true });
+  }
 
   try {
     const browser = await puppeteer.launch({
       headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu',
+      ],
     });
-    const page = await browser.newPage();
     console.log('[PDF] Browser launched');
 
+    const page = await browser.newPage();
     await page.setViewport({ width: 794, height: 1123 });
     console.log('[PDF] Viewport set');
 
-    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-    console.log('[PDF] Waiting for handbook container');
+    // Set user agent to mimic a real browser
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    );
 
-    await page.waitForFunction(() => {
-      const pages = document.querySelectorAll('#handbook-pages .type-handbook-page');
-      return pages.length > 0;
-    }, { timeout: 30000 });
-    
+    // Enable request interception to monitor network activity
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      request.continue();
+    });
+
+    console.log('[PDF] Navigating to target URL');
+    const response = await page.goto(targetUrl, {
+      waitUntil: 'networkidle2',
+      timeout: 60000,
+    });
+
+    if (!response.ok()) {
+      throw new Error(`Page load failed with status ${response.status()}`);
+    }
+
+    // Take initial screenshot for debugging
+    await page.screenshot({ path: initialScreenPath });
+    console.log('[PDF] Initial screenshot saved');
+
+    // Verify handbook container exists
+    console.log('[PDF] Checking for handbook container');
+    const containerExists = await page.evaluate(() => {
+      return !!document.querySelector('#handbook-pages');
+    });
+
+    if (!containerExists) {
+      const html = await page.content();
+      fs.writeFileSync(failedLoadPath, html);
+      throw new Error(
+        'Handbook container not found in DOM - saved failed-load.html'
+      );
+    }
+
+    // Wait for pages to load with increased timeout
+    console.log('[PDF] Waiting for handbook pages');
+    await page.waitForSelector('#handbook-pages .type-handbook-page', {
+      timeout: 60000,
+      visible: true,
+    });
+
     console.log('[PDF] Handbook pages are now present');
-
     await page.emulateMediaType('screen');
-    console.log('[PDF] Emulating media type screen');
 
+    // Get all sections
     const sections = await page.$$('#handbook-pages .type-handbook-page');
     console.log('[PDF] Sections found:', sections.length);
 
@@ -43,16 +96,21 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       await page.screenshot({ path: screenPath, fullPage: true });
       const html = await page.content();
       fs.writeFileSync(htmlPath, html);
-      throw new Error('[PDF] No sections found — likely rendering issue on page');
+      throw new Error(
+        '[PDF] No sections found — likely rendering issue on page'
+      );
     }
 
+    // Process each section
     const buffers = [];
     for (let i = 0; i < sections.length; i++) {
       console.log(`[PDF] Rendering section ${i + 1}/${sections.length}`);
       await page.evaluate((idx) => {
         document
           .querySelectorAll('#handbook-pages .type-handbook-page')
-          .forEach((el, j) => (el.style.display = j === idx ? 'block' : 'none'));
+          .forEach(
+            (el, j) => (el.style.display = j === idx ? 'block' : 'none')
+          );
       }, i);
 
       const buf = await page.pdf({
@@ -64,6 +122,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       buffers.push(buf);
     }
 
+    // Save debug files
     await page.screenshot({ path: screenPath, fullPage: true });
     const html = await page.content();
     fs.writeFileSync(htmlPath, html);
@@ -72,6 +131,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     await browser.close();
     console.log('[PDF] Browser closed');
 
+    // Merge PDFs
     const merged = await PDFDocument.create();
     for (const buf of buffers) {
       const doc = await PDFDocument.load(buf);
@@ -79,17 +139,32 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       merged.addPage(page);
     }
 
+    // Save final PDF
     const finalPdf = await merged.save();
     const filename = `handbook-${uuidv4()}.pdf`;
     const filepath = path.join(outDir, filename);
-
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
     fs.writeFileSync(filepath, finalPdf);
     console.log('[PDF] Final PDF saved at:', filepath);
 
     return { filename, filepath };
   } catch (err) {
-    console.error('[PDF] ERROR:', err.message || err);
+    console.error('[PDF] ERROR:', err);
+    console.error('[PDF] Stack:', err.stack);
+
+    // Try to save any available debug info
+    try {
+      if (page) {
+        await page.screenshot({
+          path: path.join(outDir, 'error-screenshot.png'),
+        });
+        const html = await page.content();
+        fs.writeFileSync(path.join(outDir, 'error-page.html'), html);
+      }
+    } catch (debugErr) {
+      console.error('[PDF] Debug save failed:', debugErr);
+    }
+
+    if (browser) await browser.close();
     return Promise.reject(err);
   }
 };
