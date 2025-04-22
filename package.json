@@ -1,7 +1,7 @@
 {
   "scripts": {
     "start": "node index.js",
-    "postinstall": "node node_modules/puppeteer/install.js"
+    "postinstall": "echo \"Skipping Puppeteer install on Render\""
   },
   "dependencies": {
     "express": "^5.1.0",
