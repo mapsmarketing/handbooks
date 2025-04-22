@@ -1,31 +1,30 @@
 const express = require('express');
-const app = express();
-const handbookPdf = require('./utils/handbookPdf');
 const path = require('path');
-const fs = require('fs');
+const generateHandbookPdf = require('./utils/handbookPdf');
 
+const app = express();
 app.use(express.json());
 
-// Update route to the root instead of '/node'
+// 1) PDF generation endpoint
 app.get('/print/handbook', async (req, res) => {
   const { targetUrl } = req.query;
-
   if (!targetUrl || !targetUrl.includes('print=true')) {
-    return res.status(400).json({ error: 'Invalid target URL.' });
+    return res.status(400).json({ error: 'Invalid targetUrl (must include print=true)' });
   }
 
   try {
-    const { filename, filepath } = await handbookPdf(targetUrl);
-    const url = `/output/${filename}`; // update to `/output/` as a relative URL
-    res.json({ url });
+    const { filename } = await generateHandbookPdf(targetUrl);
+    // return the public URL to download
+    res.json({ url: `/output/${filename}` });
   } catch (err) {
     console.error('🔥 PDF generation error:', err);
-    res.status(500).json({ error: 'PDF generation failed.' });
+    res.status(500).json({ error: 'PDF generation failed' });
   }
 });
 
-// Serve static files directly from the root for the 'output' folder
+// 2) Serve the output folder
 app.use('/output', express.static(path.join(__dirname, 'output')));
 
+// Listen on the port Render assigns
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Node app running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ PDF service listening on port ${PORT}`));

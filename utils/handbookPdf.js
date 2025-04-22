@@ -1,68 +1,71 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
+const chromeLauncher = require('chrome-launcher');
+const puppeteer = require('puppeteer-core');
 const { PDFDocument } = require('pdf-lib');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
-async function handbookPdf(targetUrl) {
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: [
+module.exports = async function generateHandbookPdf(targetUrl) {
+  // 1) Launch system-installed Chrome
+  const chrome = await chromeLauncher.launch({
+    chromeFlags: [
+      '--headless',
       '--no-sandbox',
-      '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--disable-setuid-sandbox'
     ]
   });
-  
+
+  // 2) Connect Puppeteer to that Chrome instance
+  const browser = await puppeteer.connect({
+    browserWSEndpoint: `ws://localhost:${chrome.port}`,
+    defaultViewport: { width: 794, height: 1123 }
+  });
+
   const page = await browser.newPage();
-  await page.setViewport({ width: 794, height: 1123 });
   await page.goto(targetUrl, { waitUntil: 'networkidle0' });
   await page.emulateMediaType('screen');
 
+  // 3) Capture each .type-handbook-page as its own PDF buffer
   const sections = await page.$$('#handbook-pages .type-handbook-page');
   const buffers = [];
-
   for (let i = 0; i < sections.length; i++) {
-    await page.evaluate((idx) => {
+    await page.evaluate(idx => {
       document
         .querySelectorAll('#handbook-pages .type-handbook-page')
-        .forEach((el, j) => (el.style.display = j === idx ? 'block' : 'none'));
+        .forEach((el, j) => {
+          el.style.display = (j === idx ? 'block' : 'none');
+        });
     }, i);
 
-    const buf = await page.pdf({
-      printBackground: true,
-      width: '794px',
-      height: '1123px',
-      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-    });
-    buffers.push(buf);
+    buffers.push(
+      await page.pdf({
+        printBackground: true,
+        width: '794px',
+        height: '1123px',
+        margin: { top: 0, right: 0, bottom: 0, left: 0 }
+      })
+    );
   }
 
   await browser.close();
+  await chrome.kill();
 
+  // 4) Merge with pdf-lib
   const merged = await PDFDocument.create();
   for (const buf of buffers) {
     const doc = await PDFDocument.load(buf);
-    const [page] = await merged.copyPages(doc, [0]);
-    merged.addPage(page);
+    const [p] = await merged.copyPages(doc, [0]);
+    merged.addPage(p);
   }
 
   const finalPdf = await merged.save();
   const filename = `handbook-${uuidv4()}.pdf`;
-  const filepath = path.join(__dirname, '..', 'output', filename);
-
-  // Ensure output directory exists
-  if (!fs.existsSync(path.join(__dirname, '..', 'output'))) {
-    fs.mkdirSync(path.join(__dirname, '..', 'output'));
-  }
-
+  const outDir = path.join(__dirname, '..', 'output');
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+  const filepath = path.join(outDir, filename);
   fs.writeFileSync(filepath, finalPdf);
-  return { filename, filepath };
-}
 
-module.exports = handbookPdf;
+  return { filename, filepath };
+};
