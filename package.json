@@ -5,10 +5,10 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "chrome-launcher": "^0.17.0",
+    "chrome-launcher": "^0.10.2",
     "express": "^5.1.0",
-    "pdf-lib": "^1.17.1",
     "puppeteer-core": "^24.6.0",
+    "pdf-lib": "^1.17.1",
     "uuid": "^11.1.0"
   },
   "engines": {
