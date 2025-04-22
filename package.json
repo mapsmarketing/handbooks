@@ -8,7 +8,6 @@
     "express": "^5.1.0",
     "pdf-lib": "^1.17.1",
     "puppeteer-core": "^24.6.0",
-    "chrome-aws-lambda": "^15.1.1",
     "uuid": "^11.1.0"
   },
   "engines": {
