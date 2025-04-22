@@ -4,25 +4,21 @@ const { PDFDocument } = require('pdf-lib');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-// Render.com specific configuration
-const IS_RENDER = process.env.RENDER;
-const CHROME_EXECUTABLE_PATH = IS_RENDER
-  ? '/opt/render/.cache/puppeteer/chrome/linux-108.0.5359.94/chrome-linux64/chrome'
-  : puppeteer.executablePath();
-
 async function handbookPdf(targetUrl) {
   const browser = await puppeteer.launch({
     headless: 'new',
-    executablePath: CHROME_EXECUTABLE_PATH,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
-      '--single-process',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
       '--no-zygote',
-    ],
+      '--single-process',
+      '--disable-gpu'
+    ]
   });
-
+  
   const page = await browser.newPage();
   await page.setViewport({ width: 794, height: 1123 });
   await page.goto(targetUrl, { waitUntil: 'networkidle0' });
