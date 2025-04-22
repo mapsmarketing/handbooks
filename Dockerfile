@@ -9,6 +9,7 @@ COPY package.json package-lock.json ./
 
 # 4) Prevent Puppeteer from downloading Chromium (we already have it)
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # 5) Install deps
 RUN npm ci
