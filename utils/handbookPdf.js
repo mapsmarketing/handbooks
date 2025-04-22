@@ -31,6 +31,12 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     buffers.push(buf);
   }
 
+  const outDir = path.join(__dirname, '..', 'output');
+  const screenPath = path.join(outDir, 'debug-screenshot.png');
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+
+  await page.screenshot({ path: screenPath, fullPage: true });
+
   await browser.close();
 
   const merged = await PDFDocument.create();
@@ -42,8 +48,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
 
   const finalPdf = await merged.save();
   const filename = `handbook-${uuidv4()}.pdf`;
-  const outDir = path.join(__dirname, '..', 'output');
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
   const filepath = path.join(outDir, filename);
   fs.writeFileSync(filepath, finalPdf);
 
