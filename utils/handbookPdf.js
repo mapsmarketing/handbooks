@@ -23,11 +23,15 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     await page.setViewport({ width: 794, height: 1123 });
     console.log('[PDF] Viewport set');
 
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    console.log('[PDF] Page loaded');
+    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+    console.log('[PDF] Waiting for handbook container');
 
-    await page.waitForSelector('#handbook-pages .type-handbook-page', { timeout: 10000 });
-    console.log('[PDF] Selector found: #handbook-pages .type-handbook-page');
+    await page.waitForFunction(() => {
+      const pages = document.querySelectorAll('#handbook-pages .type-handbook-page');
+      return pages.length > 0;
+    }, { timeout: 30000 });
+    
+    console.log('[PDF] Handbook pages are now present');
 
     await page.emulateMediaType('screen');
     console.log('[PDF] Emulating media type screen');
