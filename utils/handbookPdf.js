@@ -1,10 +1,10 @@
 const puppeteer = require('puppeteer');
-const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
+const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-async function handbookPdf(targetUrl) {
+module.exports = async function generateHandbookPdf(targetUrl) {
   const browser = await puppeteer.launch({ headless: 'new' });
   const page = await browser.newPage();
 
@@ -33,12 +33,11 @@ async function handbookPdf(targetUrl) {
 
   await browser.close();
 
-  // 3) Merge pages into one PDF
   const merged = await PDFDocument.create();
   for (const buf of buffers) {
     const doc = await PDFDocument.load(buf);
-    const [p] = await merged.copyPages(doc, [0]);
-    merged.addPage(p);
+    const [page] = await merged.copyPages(doc, [0]);
+    merged.addPage(page);
   }
 
   const finalPdf = await merged.save();
@@ -49,6 +48,4 @@ async function handbookPdf(targetUrl) {
   fs.writeFileSync(filepath, finalPdf);
 
   return { filename, filepath };
-}
-
-module.exports = handbookPdf;
+};
