@@ -89,11 +89,11 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     );
     console.log('[PDF] Viewport set');
 
-    // Allow ALL resources to load (remove request interception)
+    // Allow ALL resources to load
     console.log('[PDF] Navigating to target URL');
     const response = await page.goto(targetUrl, {
       waitUntil: 'networkidle2',
-      timeout: 120000, // Increased to 2 minutes for heavy pages
+      timeout: 120000,
     });
 
     if (!response.ok()) {
@@ -103,53 +103,56 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     // Wait for all assets to load
     console.log('[PDF] Waiting for assets to load');
     await page.evaluate(async () => {
-      // Wait for stylesheets
-      await Promise.all(
-        Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(
-          (link) => {
+      const waitForAssets = async () => {
+        // Wait for stylesheets
+        await Promise.all(
+          Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(
+            (link) => {
+              return new Promise((resolve) => {
+                if (link.sheet) return resolve();
+                link.addEventListener('load', resolve);
+                link.addEventListener('error', resolve);
+              });
+            }
+          )
+        );
+
+        // Wait for fonts
+        await document.fonts.ready;
+
+        // Wait for images (including background images)
+        await Promise.all(
+          Array.from(document.images).map((img) => {
+            if (img.complete) return Promise.resolve();
             return new Promise((resolve) => {
-              if (link.sheet) return resolve();
-              link.addEventListener('load', resolve);
-              link.addEventListener('error', resolve);
+              img.addEventListener('load', resolve);
+              img.addEventListener('error', resolve);
             });
-          }
-        )
-      );
+          })
+        );
 
-      // Wait for fonts
-      await document.fonts.ready;
+        // Wait for iframes
+        await Promise.all(
+          Array.from(document.querySelectorAll('iframe')).map((iframe) => {
+            return new Promise((resolve) => {
+              if (iframe.contentDocument?.readyState === 'complete')
+                return resolve();
+              iframe.addEventListener('load', resolve);
+              iframe.addEventListener('error', resolve);
+            });
+          })
+        );
+      };
 
-      // Wait for images
-      await Promise.all(
-        Array.from(document.images).map((img) => {
-          return new Promise((resolve) => {
-            if (img.complete) return resolve();
-            img.addEventListener('load', resolve);
-            img.addEventListener('error', resolve);
-          });
-        })
-      );
-
-      // Wait for iframes
-      await Promise.all(
-        Array.from(document.querySelectorAll('iframe')).map((iframe) => {
-          return new Promise((resolve) => {
-            if (iframe.contentDocument.readyState === 'complete')
-              return resolve();
-            iframe.addEventListener('load', resolve);
-            iframe.addEventListener('error', resolve);
-          });
-        })
-      );
+      // Try multiple times to ensure everything loads
+      for (let i = 0; i < 3; i++) {
+        await waitForAssets();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     });
 
     // Additional wait for dynamic content
-    await page.waitForFunction(
-      () => {
-        return document.fonts.ready.then(() => true);
-      },
-      { timeout: 30000 }
-    );
+    await page.waitForFunction(() => document.fonts.ready, { timeout: 30000 });
 
     // Debug saves
     await page.screenshot({ path: debugPaths.initialScreen, fullPage: true });
@@ -172,23 +175,32 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     }
     console.log(`[PDF] Found ${sections.length} sections`);
 
-    // Generate PDFs
+    // Generate PDFs - NEW APPROACH THAT PRESERVES STYLES
     const buffers = [];
     for (let i = 0; i < sections.length; i++) {
       console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
 
+      // NEW: Toggle visibility using class names instead of inline styles
       await page.evaluate((idx) => {
+        // First reset all sections
+        document.querySelectorAll('.type-handbook-page').forEach((el) => {
+          el.classList.remove('pdf-visible', 'pdf-hidden');
+        });
+
+        // Then set current section
         const pages = document.querySelectorAll('.type-handbook-page');
-        pages.forEach((el, j) => {
-          el.style.display = j === idx ? 'block' : 'none';
-          el.style.opacity = '1';
-          el.style.visibility = 'visible';
+        pages[idx].classList.add('pdf-visible');
+
+        // Hide others without affecting their styles
+        Array.from(pages).forEach((el, j) => {
+          if (j !== idx) el.classList.add('pdf-hidden');
         });
       }, i);
 
       // Add delay to ensure proper rendering
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
+      // Generate PDF for current section
       const buf = await page.pdf({
         printBackground: true,
         width: '794px',
