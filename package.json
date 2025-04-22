@@ -5,6 +5,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^5.1.0",
     "pdf-lib": "^1.17.1",
     "puppeteer": "^24.6.0",

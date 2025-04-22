@@ -1,8 +1,17 @@
 const express = require('express');
-const path    = require('path');
-const genPdf  = require('./utils/handbookPdf');
+const path = require('path');
+const genPdf = require('./utils/handbookPdf');
+const cors = require('cors');
 
 const app = express();
+
+app.use(
+  cors({
+    origin: 'https://handbooks.mapsmarketing.com.au',
+    methods: ['GET'],
+  })
+);
+
 app.use(express.json());
 
 app.get('/print/handbook', async (req, res) => {
