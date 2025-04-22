@@ -45,10 +45,8 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         '--no-first-run',
         '--no-zygote',
         '--disable-gpu',
-        '--single-process',
         '--disable-features=site-per-process',
-        '--disable-web-security',
-        '--disable-extensions'
+        '--disable-web-security'
       ],
       timeout: 60000,
       dumpio: true // Pipe browser console to Node.js
@@ -63,15 +61,19 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     });
 
     // Configure viewport and user agent
-    await page.setViewport({ width: 794, height: 1123, deviceScaleFactor: 2 });
+    await page.setViewport({ 
+      width: 794, 
+      height: 1123, 
+      deviceScaleFactor: 2 
+    });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     console.log('[PDF] Viewport set');
 
-    // Configure request handling
+    // Configure request handling - ALLOW CSS THIS TIME
     await page.setRequestInterception(true);
     page.on('request', (req) => {
-      // Block unnecessary resources to speed up loading
-      const blockedResources = ['image', 'stylesheet', 'font', 'media'];
+      // Only block images and fonts to preserve CSS
+      const blockedResources = ['image', 'font'];
       if (blockedResources.includes(req.resourceType())) {
         req.abort();
       } else {
@@ -88,6 +90,18 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     if (!response.ok()) {
       throw new Error(`Page load failed with status ${response.status()}`);
     }
+
+    // Wait for all CSS to load
+    await page.evaluate(async () => {
+      const selectors = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+      await Promise.all(selectors.map(link => {
+        return new Promise((resolve) => {
+          if (link.sheet) return resolve();
+          link.addEventListener('load', resolve);
+          link.addEventListener('error', resolve);
+        });
+      }));
+    });
 
     // Initial debug saves
     await page.screenshot({ path: debugPaths.initialScreen, fullPage: true });
@@ -126,23 +140,26 @@ module.exports = async function generateHandbookPdf(targetUrl) {
           const pages = document.querySelectorAll('.type-handbook-page');
           pages.forEach((el, j) => {
             el.style.display = j === idx ? 'block' : 'none';
+            // Ensure visibility for printing
+            el.style.opacity = '1';
+            el.style.visibility = 'visible';
           });
         }, i);
 
         // Add small delay between operations
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const buf = await page.pdf({
           printBackground: true,
           width: '794px',
           height: '1123px',
           margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-          timeout: 30000
+          timeout: 30000,
+          preferCSSPageSize: true
         });
         buffers.push(buf);
       } catch (sectionErr) {
         console.error(`[PDF] Error processing section ${i + 1}:`, sectionErr);
-        // Save debug info for failed section
         await page.screenshot({ path: path.join(debugDir, `section-error-${i}.png`) });
         throw sectionErr;
       }
@@ -172,7 +189,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   } catch (err) {
     console.error('[PDF] CRITICAL ERROR:', err);
     
-    // Enhanced error debugging
     try {
       if (page) {
         await page.screenshot({ path: debugPaths.errorScreen });
@@ -185,7 +201,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
 
     throw err;
   } finally {
-    // Ensure browser is always closed
     if (browser) {
       await browser.close().catch(err => {
         console.error('[PDF] Browser close error:', err);
