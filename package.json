@@ -1,14 +1,14 @@
 {
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "echo \"Skipping Puppeteer install on Render\""
+    "start": "node index.js"
   },
   "dependencies": {
     "express": "^5.1.0",
-    "glob": "^11.0.1",
-    "page-flip": "^2.0.7",
     "pdf-lib": "^1.17.1",
-    "puppeteer": "^24.6.0",
+    "puppeteer": "^21.7.0",
     "uuid": "^11.1.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
