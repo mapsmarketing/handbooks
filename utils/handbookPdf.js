@@ -19,11 +19,8 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
 
-  // Debug file paths
+  // Debug text logs only
   const debugPaths = {
-    initialScreen: path.join(debugDir, 'initial-load.png'),
-    finalScreen: path.join(debugDir, 'final-screenshot.png'),
-    errorScreen: path.join(debugDir, 'error-screenshot.png'),
     pageHTML: path.join(debugDir, 'page-content.html'),
     errorHTML: path.join(debugDir, 'error-content.html'),
     consoleLog: path.join(debugDir, 'console-log.txt'),
@@ -36,7 +33,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   const networkRequests = [];
 
   try {
-    // Launch browser with more robust settings
     browser = await puppeteer.launch({
       headless: 'new',
       args: [
@@ -44,41 +40,32 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
         '--disable-gpu',
+        '--no-zygote',
+        '--no-first-run',
         '--disable-features=site-per-process',
       ],
       timeout: 60000,
-      dumpio: true,
     });
     console.log('[PDF] Browser launched');
 
     page = await browser.newPage();
 
-    // Capture console messages
+    // Capture browser logs
     page.on('console', (msg) => {
       consoleMessages.push(`[BROWSER CONSOLE] ${msg.text()}`);
     });
 
-    // Log network requests
-    page.on('request', (request) => {
-      networkRequests.push(
-        `Request: ${request.url()} (${request.resourceType()})`
-      );
+    page.on('request', (req) => {
+      networkRequests.push(`Request: ${req.url()} (${req.resourceType()})`);
     });
-    page.on('requestfinished', (request) => {
-      networkRequests.push(
-        `Finished: ${request.url()} (${request.resourceType()})`
-      );
+    page.on('requestfinished', (req) => {
+      networkRequests.push(`Finished: ${req.url()} (${req.resourceType()})`);
     });
-    page.on('requestfailed', (request) => {
-      networkRequests.push(
-        `Failed: ${request.url()} (${request.resourceType()})`
-      );
+    page.on('requestfailed', (req) => {
+      networkRequests.push(`Failed: ${req.url()} (${req.resourceType()})`);
     });
 
-    // Configure viewport and user agent
     await page.setViewport({
       width: 794,
       height: 1123,
@@ -89,7 +76,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     );
     console.log('[PDF] Viewport set');
 
-    // Allow ALL resources to load
     console.log('[PDF] Navigating to target URL');
     const response = await page.goto(targetUrl, {
       waitUntil: 'networkidle2',
@@ -100,27 +86,20 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       throw new Error(`Page load failed with status ${response.status()}`);
     }
 
-    // Wait for all assets to load
     console.log('[PDF] Waiting for assets to load');
     await page.evaluate(async () => {
       const waitForAssets = async () => {
-        // Wait for stylesheets
         await Promise.all(
           Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(
-            (link) => {
-              return new Promise((resolve) => {
+            (link) =>
+              new Promise((resolve) => {
                 if (link.sheet) return resolve();
                 link.addEventListener('load', resolve);
                 link.addEventListener('error', resolve);
-              });
-            }
+              })
           )
         );
-
-        // Wait for fonts
         await document.fonts.ready;
-
-        // Wait for images (including background images)
         await Promise.all(
           Array.from(document.images).map((img) => {
             if (img.complete) return Promise.resolve();
@@ -130,94 +109,77 @@ module.exports = async function generateHandbookPdf(targetUrl) {
             });
           })
         );
-
-        // Wait for iframes
         await Promise.all(
-          Array.from(document.querySelectorAll('iframe')).map((iframe) => {
-            return new Promise((resolve) => {
-              if (iframe.contentDocument?.readyState === 'complete')
-                return resolve();
-              iframe.addEventListener('load', resolve);
-              iframe.addEventListener('error', resolve);
-            });
-          })
+          Array.from(document.querySelectorAll('iframe')).map(
+            (iframe) =>
+              new Promise((resolve) => {
+                if (iframe.contentDocument?.readyState === 'complete')
+                  return resolve();
+                iframe.addEventListener('load', resolve);
+                iframe.addEventListener('error', resolve);
+              })
+          )
         );
       };
 
-      // Try multiple times to ensure everything loads
       for (let i = 0; i < 3; i++) {
         await waitForAssets();
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((r) => setTimeout(r, 500));
       }
     });
 
-    // Additional wait for dynamic content
     await page.waitForFunction(() => document.fonts.ready, { timeout: 30000 });
 
-    // Debug saves
-    await page.screenshot({ path: debugPaths.initialScreen, fullPage: true });
+    // Save logs
     fs.writeFileSync(debugPaths.pageHTML, await page.content());
     fs.writeFileSync(debugPaths.consoleLog, consoleMessages.join('\n'));
     fs.writeFileSync(debugPaths.networkLog, networkRequests.join('\n'));
     console.log('[PDF] Debug files saved');
 
-    // Wait for content
     console.log('[PDF] Waiting for content');
     await page.waitForSelector('#handbook-pages .type-handbook-page', {
       timeout: 60000,
       visible: true,
     });
 
-    // Verify content exists
     const sections = await page.$$('#handbook-pages .type-handbook-page');
     if (sections.length === 0) {
       throw new Error('No handbook sections found');
     }
     console.log(`[PDF] Found ${sections.length} sections`);
 
-    // Generate PDFs - NEW APPROACH THAT PRESERVES STYLES
     const buffers = [];
     for (let i = 0; i < sections.length; i++) {
       console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
 
-      // NEW: Toggle visibility using class names instead of inline styles
       await page.evaluate((idx) => {
-        // First reset all sections
         document.querySelectorAll('.type-handbook-page').forEach((el) => {
           el.classList.remove('pdf-visible', 'pdf-hidden');
         });
 
-        // Then set current section
         const pages = document.querySelectorAll('.type-handbook-page');
         pages[idx].classList.add('pdf-visible');
 
-        // Hide others without affecting their styles
         Array.from(pages).forEach((el, j) => {
           if (j !== idx) el.classList.add('pdf-hidden');
         });
       }, i);
 
-      // Add delay to ensure proper rendering
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Generate PDF for current section
       const buf = await page.pdf({
         printBackground: true,
         width: '794px',
         height: '1123px',
         margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-        timeout: 30000,
         preferCSSPageSize: true,
         displayHeaderFooter: false,
       });
       buffers.push(buf);
     }
 
-    // Final debug saves
-    await page.screenshot({ path: debugPaths.finalScreen, fullPage: true });
     console.log('[PDF] PDF generation complete');
 
-    // Merge PDFs
     const mergedPdf = await PDFDocument.create();
     for (const buf of buffers) {
       const doc = await PDFDocument.load(buf);
@@ -225,34 +187,19 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       mergedPdf.addPage(page);
     }
 
-    // Save final PDF
     const finalPdf = await mergedPdf.save();
     const filename = `handbook-${uuidv4()}.pdf`;
     const filepath = path.join(outDir, filename);
     fs.writeFileSync(filepath, finalPdf);
-    console.log('[PDF] Final PDF saved:', filepath);
-
-    return { filename, filepath };
+    console.log(`[PDF] Saved PDF to ${filepath}`);
   } catch (err) {
-    console.error('[PDF] CRITICAL ERROR:', err);
-
-    try {
-      if (page) {
-        await page.screenshot({ path: debugPaths.errorScreen });
-        fs.writeFileSync(debugPaths.errorHTML, await page.content());
-      }
-      fs.appendFileSync(debugPaths.consoleLog, `\n\nERROR: ${err.stack}`);
-      fs.appendFileSync(debugPaths.networkLog, `\n\nERROR: ${err.stack}`);
-    } catch (debugErr) {
-      console.error('[PDF] Debug save failed:', debugErr);
+    console.error('[PDF] ERROR:', err);
+    if (page) {
+      fs.writeFileSync(debugPaths.errorHTML, await page.content());
     }
-
-    throw err;
   } finally {
     if (browser) {
-      await browser.close().catch((err) => {
-        console.error('[PDF] Browser close error:', err);
-      });
+      await browser.close();
     }
   }
 };
