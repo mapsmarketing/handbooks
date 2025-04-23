@@ -35,10 +35,13 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     });
 
     console.log('[PDF] Loading page (JS disabled)');
+
+    await page.setViewport({ width: 794, height: 1123 });
     await page.goto(targetUrl, {
       waitUntil: 'networkidle0',
       timeout: 120000,
     });
+    await page.emulateMediaType('screen');
 
     // Wait for content (no style modifications)
     console.log('[PDF] Waiting for content');
@@ -55,12 +58,11 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     for (let i = 0; i < sections.length; i++) {
       console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
 
-      // Simply show the current section (no inline styles)
-      // await page.evaluate((idx) => {
-      //   document.querySelectorAll('.type-handbook-page').forEach((el, j) => {
-      //     el.style.display = j === idx ? '' : 'none'; // Reset to default if showing
-      //   });
-      // }, i);
+      await page.evaluate((idx) => {
+        document
+          .querySelectorAll('#handbook-pages .type-handbook-page')
+          .forEach((el, j) => (el.style.display = j === idx ? 'block' : 'none'));
+      }, i);
 
       await new Promise((resolve) => setTimeout(resolve, 1000)); // Small delay
 
