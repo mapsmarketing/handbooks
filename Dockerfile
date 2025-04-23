@@ -6,6 +6,12 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
+
+# Fix permissions for package-lock.json and the app directory
+RUN chown -R node:node /app
+USER node
+
+# Install dependencies (ensure that npm installs without root privileges)
 RUN npm install
 
 # Copy the rest of the app
