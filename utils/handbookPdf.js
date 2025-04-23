@@ -12,7 +12,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
   let browser, page;
-  const consoleMessages = [];
 
   try {
     browser = await puppeteer.launch({
@@ -23,48 +22,38 @@ module.exports = async function generateHandbookPdf(targetUrl) {
 
     page = await browser.newPage();
 
-    // Capture console logs
-    page.on('console', (msg) => {
-      consoleMessages.push(`[BROWSER CONSOLE] ${msg.text()}`);
-    });
+    // Optional: block JS if needed
+    // await page.setRequestInterception(true);
+    // page.on('request', req => {
+    //   if (req.resourceType() === 'script') req.abort(); else req.continue();
+    // });
 
-    // Block JavaScript only (allow CSS, images, fonts, etc.)
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      req.resourceType() === 'script' ? req.abort() : req.continue();
-    });
-
-    console.log('[PDF] Loading page (JS disabled)');
-
+    console.log('[PDF] Loading page');
     await page.setViewport({ width: 794, height: 1123 });
-    await page.goto(targetUrl, {
-      waitUntil: 'networkidle0',
-      timeout: 120000,
-    });
-    await page.emulateMediaType('screen');
+    await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 120000 });
 
-    // Wait for content (no style modifications)
     console.log('[PDF] Waiting for content');
     await page.waitForSelector('#handbook-pages .type-handbook-page', {
       timeout: 60000,
       visible: true,
     });
 
-    // Generate PDFs (NO STYLE OVERRIDES)
-    const buffers = [];
     const sections = await page.$$('#handbook-pages .type-handbook-page');
     console.log(`[PDF] Found ${sections.length} sections`);
 
+    const buffers = [];
     for (let i = 0; i < sections.length; i++) {
       console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
-
       await page.evaluate((idx) => {
-        document
-          .querySelectorAll('#handbook-pages .type-handbook-page')
-          .forEach((el, j) => (el.style.display = j === idx ? 'block' : 'none'));
+        const pages = document.querySelectorAll(
+          '#handbook-pages .type-handbook-page'
+        );
+        pages.forEach((el, j) => {
+          el.style.display = j === idx ? 'block' : 'none';
+        });
       }, i);
 
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Small delay
+      await new Promise((r) => setTimeout(r, 1000));
 
       const buf = await page.pdf({
         printBackground: true,
@@ -75,24 +64,23 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       buffers.push(buf);
     }
 
-    // Merge PDFs
+    console.log('[PDF] Merging PDFs');
     const mergedPdf = await PDFDocument.create();
     for (const buf of buffers) {
       const doc = await PDFDocument.load(buf);
-      const [page] = await mergedPdf.copyPages(doc, [0]);
-      mergedPdf.addPage(page);
+      const [p] = await mergedPdf.copyPages(doc, [0]);
+      mergedPdf.addPage(p);
     }
 
-    // Save final PDF
     const finalPdf = await mergedPdf.save();
     const filename = `handbook-${uuidv4()}.pdf`;
     const filepath = path.join(outDir, filename);
     fs.writeFileSync(filepath, finalPdf);
-    console.log('[PDF] Final PDF saved:', filepath);
 
+    console.log('[PDF] Final PDF saved:', filepath);
     return { filename, filepath };
   } catch (err) {
-    console.error('[PDF] ERROR:', err);
+    console.error('[PDF] CRITICAL ERROR:', err);
     throw err;
   } finally {
     if (browser) await browser.close();
