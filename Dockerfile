@@ -1,24 +1,21 @@
-# 1) Start from Puppeteer’s official image (Node & Chrome bundled)
+# Use full Puppeteer image with Chromium already installed
 FROM ghcr.io/puppeteer/puppeteer:latest
 
-# 2) Create & set working dir
+# Set working directory
 WORKDIR /app
 
-# 3) Copy package files
-COPY package.json package-lock.json ./
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm install
 
-# 4) Prevent Puppeteer from downloading Chromium (we already have it)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV NODE_OPTIONS="--max-old-space-size=2048"
-
-# 5) Install deps
-RUN npm ci
-
-# 6) Copy your app
+# Copy the rest of the app
 COPY . .
 
-# 7) Expose the port your Express app listens on
+# Create output dir
+RUN mkdir -p /app/output
+
+# Expose port
 EXPOSE 10000
 
-# 8) Run your app
-CMD ["npm", "start"]
+# Run app
+CMD ["node", "index.js"]
