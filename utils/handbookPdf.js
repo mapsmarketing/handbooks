@@ -36,6 +36,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     // Launch browser with more robust settings
     browser = await puppeteer.launch({
       headless: 'new',
+      timeout: 90000,
       args: [
         '--no-sandbox',
         '--disable-extensions',
@@ -49,34 +50,11 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         '--disable-features=site-per-process',
         '--disable-features=VizDisplayCompositor',
       ],
-      timeout: 60000,
       dumpio: true,
     });
     console.log('[PDF] Browser launched');
 
     page = await browser.newPage();
-
-    // Capture console messages
-    page.on('console', (msg) => {
-      consoleMessages.push(`[BROWSER CONSOLE] ${msg.text()}`);
-    });
-
-    // Log network requests
-    page.on('request', (request) => {
-      networkRequests.push(
-        `Request: ${request.url()} (${request.resourceType()})`
-      );
-    });
-    page.on('requestfinished', (request) => {
-      networkRequests.push(
-        `Finished: ${request.url()} (${request.resourceType()})`
-      );
-    });
-    page.on('requestfailed', (request) => {
-      networkRequests.push(
-        `Failed: ${request.url()} (${request.resourceType()})`
-      );
-    });
 
     // Configure viewport and user agent
     await page.setViewport({
@@ -99,43 +77,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     if (!response.ok()) {
       throw new Error(`Page load failed with status ${response.status()}`);
     }
-
-    // Wait for all assets to load
-    console.log('[PDF] Waiting for assets to load');
-    await page.evaluate(async () => {
-      // Wait for stylesheets
-      await Promise.all(
-        Array.from(document.querySelectorAll('link')).map((link) => {
-          return new Promise((resolve) => {
-            if (link.sheet) return resolve();
-            link.addEventListener('load', resolve);
-            link.addEventListener('error', resolve);
-          });
-        })
-      );
-
-      // Wait for fonts
-      await document.fonts.ready;
-
-      // Wait for images
-      await Promise.all(
-        Array.from(document.images).map((img) => {
-          return new Promise((resolve) => {
-            if (img.complete) return resolve();
-            img.addEventListener('load', resolve);
-            img.addEventListener('error', resolve);
-          });
-        })
-      );
-    });
-
-    // Additional wait for dynamic content
-    await page.waitForFunction(
-      () => {
-        return document.fonts.ready.then(() => true);
-      },
-      { timeout: 30000 }
-    );
 
     // Debug saves
     fs.writeFileSync(debugPaths.pageHTML, await page.content());
