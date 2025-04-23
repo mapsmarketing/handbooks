@@ -6,10 +6,16 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
+
+# Change ownership of the /app directory
+RUN chown -R pptruser:pptruser /app
+
+# Install dependencies as pptruser
+USER pptruser
 RUN npm install
 
 # Copy the rest of the app
-COPY . .
+COPY --chown=pptruser:pptruser . .
 
 # Create output dir
 RUN mkdir -p /app/output
