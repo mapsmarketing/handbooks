@@ -11,15 +11,9 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   const outDir = path.join(__dirname, '..', 'output');
   const debugDir = path.join(outDir, 'debug');
 
-  // Ensure output directories exist
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
-  }
-  if (!fs.existsSync(debugDir)) {
-    fs.mkdirSync(debugDir, { recursive: true });
-  }
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
 
-  // Debug file paths
   const debugPaths = {
     pageHTML: path.join(debugDir, 'page-content.html'),
     errorHTML: path.join(debugDir, 'error-content.html'),
@@ -33,22 +27,20 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   const networkRequests = [];
 
   try {
-    // Launch browser with more robust settings
     browser = await puppeteer.launch({
       headless: 'new',
       timeout: 90000,
       args: [
         '--no-sandbox',
-        '--disable-extensions',
-        '--disable-software-rasterizer',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
+        '--enable-software-rasterizer',
         '--disable-gpu',
+        '--disable-accelerated-2d-canvas',
         '--disable-features=site-per-process',
         '--disable-features=VizDisplayCompositor',
+        '--no-first-run',
+        '--no-zygote',
       ],
       dumpio: true,
     });
@@ -56,7 +48,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
 
     page = await browser.newPage();
 
-    // Configure viewport and user agent
     await page.setViewport({
       width: 794,
       height: 1123,
@@ -65,40 +56,58 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     await page.setUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     );
-    console.log('[PDF] Viewport set');
 
-    // Allow ALL resources to load (remove request interception)
+    // Track console messages
+    page.on('console', msg => {
+      const type = msg.type().toUpperCase();
+      const args = msg.args().map(a => a.toString()).join(' ');
+      consoleMessages.push(`[${type}] ${args}`);
+    });
+
+    // Track failed requests
+    page.on('requestfailed', request => {
+      const errMsg = `[FAILED] ${request.url()} - ${request.failure()?.errorText}`;
+      networkRequests.push(errMsg);
+      console.error(errMsg);
+    });
+
+    // Track successful requests
+    page.on('requestfinished', request => {
+      networkRequests.push(`[OK] ${request.url()}`);
+    });
+
     console.log('[PDF] Navigating to target URL');
     const response = await page.goto(targetUrl, {
       waitUntil: 'networkidle2',
-      timeout: 120000, // Increased to 2 minutes for heavy pages
+      timeout: 120000,
     });
 
     if (!response.ok()) {
       throw new Error(`Page load failed with status ${response.status()}`);
     }
 
-    // Debug saves
     fs.writeFileSync(debugPaths.pageHTML, await page.content());
     fs.writeFileSync(debugPaths.consoleLog, consoleMessages.join('\n'));
     fs.writeFileSync(debugPaths.networkLog, networkRequests.join('\n'));
-    console.log('[PDF] Debug files saved');
 
-    // Wait for content
     console.log('[PDF] Waiting for content');
     await page.waitForSelector('#handbook-pages .type-handbook-page', {
       timeout: 60000,
       visible: true,
     });
 
-    // Verify content exists
+    // Extra assurance that styles like background images are loaded
+    await page.waitForFunction(() => {
+      const el = document.querySelector('.type-handbook-page');
+      return el && window.getComputedStyle(el).backgroundImage !== 'none';
+    }, { timeout: 30000 });
+
     const sections = await page.$$('#handbook-pages .type-handbook-page');
     if (sections.length === 0) {
       throw new Error('No handbook sections found');
     }
     console.log(`[PDF] Found ${sections.length} sections`);
 
-    // Generate PDFs
     const buffers = [];
     for (let i = 0; i < sections.length; i++) {
       console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
@@ -112,8 +121,16 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         });
       }, i);
 
-      // Add delay to ensure proper rendering
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Give rendering time before snapshot
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await page.evaluate(() => {
+        return new Promise(resolve => {
+          requestAnimationFrame(() => {
+            document.body.offsetHeight; // force reflow
+            setTimeout(resolve, 500);
+          });
+        });
+      });
 
       const buf = await page.pdf({
         printBackground: true,
@@ -124,13 +141,10 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         preferCSSPageSize: true,
         displayHeaderFooter: false,
       });
+
       buffers.push(buf);
     }
 
-    // Final debug saves
-    console.log('[PDF] PDF generation complete');
-
-    // Merge PDFs
     const mergedPdf = await PDFDocument.create();
     for (const buf of buffers) {
       const doc = await PDFDocument.load(buf);
@@ -138,7 +152,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       mergedPdf.addPage(page);
     }
 
-    // Save final PDF
     const finalPdf = await mergedPdf.save();
     const filename = `handbook-${uuidv4()}.pdf`;
     const filepath = path.join(outDir, filename);
@@ -146,6 +159,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     console.log('[PDF] Final PDF saved:', filepath);
 
     return { filename, filepath };
+
   } catch (err) {
     console.error('[PDF] CRITICAL ERROR:', err);
 
