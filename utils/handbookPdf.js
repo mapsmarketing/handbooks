@@ -38,6 +38,8 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       headless: 'new',
       args: [
         '--no-sandbox',
+        '--disable-extensions',
+        '--disable-software-rasterizer',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
@@ -45,6 +47,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         '--no-zygote',
         '--disable-gpu',
         '--disable-features=site-per-process',
+        '--disable-features=VizDisplayCompositor',
       ],
       timeout: 60000,
       dumpio: true,
