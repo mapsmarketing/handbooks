@@ -45,7 +45,14 @@ async function handbookPdf(targetUrl) {
 
   const finalPdf = await merged.save();
   const filename = `handbook-${uuidv4()}.pdf`;
-  const filepath = path.join(__dirname, '..', 'output', filename);
+  const outputDir = path.join(__dirname, '..', 'output');
+
+  // Ensure the output directory exists, create it if not
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const filepath = path.join(outputDir, filename);
 
   fs.writeFileSync(filepath, finalPdf);
   return { filename, filepath };
