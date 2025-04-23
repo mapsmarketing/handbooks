@@ -56,11 +56,11 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
 
       // Simply show the current section (no inline styles)
-      await page.evaluate((idx) => {
-        document.querySelectorAll('.type-handbook-page').forEach((el, j) => {
-          el.style.display = j === idx ? '' : 'none'; // Reset to default if showing
-        });
-      }, i);
+      // await page.evaluate((idx) => {
+      //   document.querySelectorAll('.type-handbook-page').forEach((el, j) => {
+      //     el.style.display = j === idx ? '' : 'none'; // Reset to default if showing
+      //   });
+      // }, i);
 
       await new Promise((resolve) => setTimeout(resolve, 1000)); // Small delay
 
