@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 
 async function handbookPdf(targetUrl) {
   const browser = await puppeteer.launch({
-    headless: true, //'new'
+    headless: 'new',
     // timeout: 90000,
     args: [
       '--no-sandbox',
