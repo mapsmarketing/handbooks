@@ -5,7 +5,24 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 async function handbookPdf(targetUrl) {
-  const browser = await puppeteer.launch({ headless: 'new' });
+  const browser = await puppeteer.launch({
+    headless: true, //'new'
+    // timeout: 90000,
+    args: [
+      '--no-sandbox',
+      // '--disable-extensions',
+      // '--enable-software-rasterizer',
+      // '--disable-setuid-sandbox',
+      // '--disable-dev-shm-usage',
+      // '--disable-accelerated-2d-canvas',
+      // '--no-first-run',
+      // '--no-zygote',
+      // '--disable-gpu',
+      // '--disable-features=site-per-process',
+      // '--disable-features=VizDisplayCompositor',
+    ],
+    // dumpio: true,
+  });
   const page = await browser.newPage();
 
   await page.setViewport({ width: 794, height: 1123 });
