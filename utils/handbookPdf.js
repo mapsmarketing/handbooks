@@ -39,16 +39,16 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       timeout: 90000,
       args: [
         '--no-sandbox',
-        '--disable-extensions',
-        '--enable-software-rasterizer',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--disable-features=site-per-process',
-        '--disable-features=VizDisplayCompositor',
+        // '--disable-extensions',
+        // '--enable-software-rasterizer',
+        // '--disable-setuid-sandbox',
+        // '--disable-dev-shm-usage',
+        // '--disable-accelerated-2d-canvas',
+        // '--no-first-run',
+        // '--no-zygote',
+        // '--disable-gpu',
+        // '--disable-features=site-per-process',
+        // '--disable-features=VizDisplayCompositor',
       ],
       dumpio: true,
     });
@@ -97,6 +97,23 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       throw new Error('No handbook sections found');
     }
     console.log(`[PDF] Found ${sections.length} sections`);
+
+    await page.evaluate(() => {
+      const bgEls = Array.from(document.querySelectorAll('*'))
+        .filter(el => window.getComputedStyle(el).backgroundImage.includes('url'));
+    
+      return Promise.all(bgEls.map(el => {
+        const url = window.getComputedStyle(el).backgroundImage;
+        const match = url.match(/url\(["']?(.*?)["']?\)/);
+        if (!match) return;
+    
+        return new Promise(resolve => {
+          const img = new Image();
+          img.src = match[1];
+          img.onload = img.onerror = resolve;
+        });
+      }));
+    });
 
     // Generate PDFs
     const buffers = [];
