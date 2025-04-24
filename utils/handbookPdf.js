@@ -35,7 +35,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   try {
     // Launch browser with more robust settings
     browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       timeout: 90000,
       args: [
         '--no-sandbox',
