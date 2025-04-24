@@ -4,6 +4,9 @@ FROM ghcr.io/puppeteer/puppeteer:latest
 # 2) Create & set working dir
 WORKDIR /app
 
+# Create the output directory
+RUN mkdir -p /app/output
+
 # 3) Copy package files
 COPY package.json package-lock.json ./
 
