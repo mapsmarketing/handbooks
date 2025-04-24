@@ -35,8 +35,8 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   try {
     // Launch browser with more robust settings
     browser = await puppeteer.launch({
-      headless: 'new',
-      // timeout: 90000,
+      headless: true,//'new',
+      timeout: 90000,
       args: [
         '--no-sandbox',
         // '--disable-extensions',
@@ -65,6 +65,9 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     // await page.setUserAgent(
     //   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     // );
+    await page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.133 Safari/537.36'
+    );
     console.log('[PDF] Viewport set');
 
     // Allow ALL resources to load (remove request interception)
