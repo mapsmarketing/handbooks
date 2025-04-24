@@ -84,6 +84,31 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     fs.writeFileSync(debugPaths.networkLog, networkRequests.join('\n'));
     console.log('[PDF] Debug files saved');
 
+    // Wait for CSS files to be loaded
+    await page.evaluate(async () => {
+      const stylesheets = Array.from(document.styleSheets);
+      
+      // Filter for external stylesheets only
+      const pendingStylesheets = stylesheets
+        .filter(sheet => !sheet.disabled && sheet.href)
+        .map(sheet => new Promise((resolve) => {
+          if (sheet.ownerNode && sheet.ownerNode.tagName === 'LINK') {
+            const linkEl = sheet.ownerNode;
+            if (linkEl.sheet) {
+              resolve();
+            } else {
+              linkEl.addEventListener('load', resolve);
+              linkEl.addEventListener('error', resolve); // fallback
+            }
+          } else {
+            resolve(); // inline style or already loaded
+          }
+        }));
+    
+      await Promise.all(pendingStylesheets);
+    });
+    console.log('[PDF] CSS files loaded');
+
     // Wait for content
     console.log('[PDF] Waiting for content');
     await page.waitForSelector('#handbook-pages .type-handbook-page', {
@@ -97,23 +122,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       throw new Error('No handbook sections found');
     }
     console.log(`[PDF] Found ${sections.length} sections`);
-
-    await page.evaluate(() => {
-      const bgEls = Array.from(document.querySelectorAll('*'))
-        .filter(el => window.getComputedStyle(el).backgroundImage.includes('url'));
-    
-      return Promise.all(bgEls.map(el => {
-        const url = window.getComputedStyle(el).backgroundImage;
-        const match = url.match(/url\(["']?(.*?)["']?\)/);
-        if (!match) return;
-    
-        return new Promise(resolve => {
-          const img = new Image();
-          img.src = match[1];
-          img.onload = img.onerror = resolve;
-        });
-      }));
-    });
 
     // Generate PDFs
     const buffers = [];
