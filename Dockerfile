@@ -1,31 +1,28 @@
-# 1. Use a slim Node.js base image
-FROM node:20-slim
+# 1) Start from Puppeteer’s official image (Node & Chrome bundled)
+FROM ghcr.io/puppeteer/puppeteer:latest
 
-# 2. Install system dependencies needed for Chromium to run
-RUN apt-get update && apt-get install -y \
-    ca-certificates fonts-liberation libappindicator3-1 \
-    libasound2 libatk-bridge2.0-0 libatk1.0-0 libcups2 \
-    libdbus-1-3 libx11-xcb1 libxcomposite1 libxdamage1 \
-    libxrandr2 libgbm1 libnspr4 libnss3 libxshmfence1 \
-    xdg-utils wget gnupg unzip \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
-
-# 3. Set working directory
+# 2) Create & set working dir
 WORKDIR /app
 
 # Create the output directory
 RUN mkdir -p /app/output
 
-# 4. Copy and install dependencies (Puppeteer will download Chromium)
+# 3) Copy package files
 COPY package.json package-lock.json ./
+
+# 4) Prevent Puppeteer from downloading Chromium (we already have it)
+# ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV NODE_OPTIONS=--max_old_space_size=512
+
+# 5) Install deps
 RUN npm ci
 
-# 5. Copy the rest of the application
+# 6) Copy your app
 COPY . .
 
-# 6. Expose port (adjust if your app uses a different one)
+# 7) Expose the port your Express app listens on
 EXPOSE 10000
 
-# 7. Start the app
+# 8) Run your app
 CMD ["npm", "start"]
