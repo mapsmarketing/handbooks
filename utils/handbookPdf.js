@@ -35,7 +35,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
   try {
     // Launch browser with more robust settings
     browser = await puppeteer.launch({
-      headless: true,//'new',
+      headless: true, //'new',
       timeout: 90000,
       args: [
         '--no-sandbox',
@@ -62,9 +62,10 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       height: 1123,
       // deviceScaleFactor: 2,
     });
-    // await page.setUserAgent(
-    //   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    // );
+    await page.setExtraHTTPHeaders({
+      'x-custom-auth':
+        '18aa1c8ad36525b7c974a672d1ad08ee8bccd35b670c16f980dab3d32cc253a5',
+    });
     await page.setUserAgent(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.133 Safari/537.36'
     );
