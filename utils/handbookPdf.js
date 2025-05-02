@@ -19,18 +19,8 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
 
-  // Debug file paths
-  const debugPaths = {
-    pageHTML: path.join(debugDir, 'page-content.html'),
-    errorHTML: path.join(debugDir, 'error-content.html'),
-    consoleLog: path.join(debugDir, 'console-log.txt'),
-    networkLog: path.join(debugDir, 'network-requests.txt'),
-  };
-
   let browser;
   let page;
-  const consoleMessages = [];
-  const networkRequests = [];
 
   try {
     // Launch browser with more robust settings
@@ -83,12 +73,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       throw new Error(`Page load failed with status ${response.status()}`);
     }
 
-    // Debug saves
-    fs.writeFileSync(debugPaths.pageHTML, await page.content());
-    fs.writeFileSync(debugPaths.consoleLog, consoleMessages.join('\n'));
-    fs.writeFileSync(debugPaths.networkLog, networkRequests.join('\n'));
-    console.log('[PDF] Debug files saved');
-
     // Wait for CSS files to be loaded
     await page.evaluate(async () => {
       const stylesheets = Array.from(document.styleSheets);
@@ -131,48 +115,34 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     }
     console.log(`[PDF] Found ${sections.length} sections`);
 
-    // Generate PDFs
-    const buffers = [];
-    for (let i = 0; i < sections.length; i++) {
-      console.log(`[PDF] Processing section ${i + 1}/${sections.length}`);
-
-      await page.evaluate((idx) => {
-        const pages = document.querySelectorAll('.type-handbook-page');
-        pages.forEach((el, j) => {
-          el.style.display = j === idx ? 'block' : 'none';
-          el.style.opacity = '1';
-          el.style.visibility = 'visible';
-        });
-      }, i);
-
-      // Add delay to ensure proper rendering
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      const buf = await page.pdf({
-        printBackground: true,
-        width: '794px',
-        height: '1123px',
-        margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-        timeout: 30000,
-        preferCSSPageSize: true,
-        displayHeaderFooter: false,
+    // Show all pages
+    await page.evaluate(() => {
+      const pages = document.querySelectorAll('.type-handbook-page');
+      pages.forEach((el) => {
+        el.style.display = 'block';
+        el.style.opacity = '1';
+        el.style.visibility = 'visible';
       });
-      buffers.push(buf);
-    }
+    });
 
-    // Final debug saves
-    console.log('[PDF] PDF generation complete');
+    // Allow some time for all to render
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
-    // Merge PDFs
-    const mergedPdf = await PDFDocument.create();
-    for (const buf of buffers) {
-      const doc = await PDFDocument.load(buf);
-      const [page] = await mergedPdf.copyPages(doc, [0]);
-      mergedPdf.addPage(page);
-    }
+    // Generate one PDF for all
+    const buf = await page.pdf({
+      printBackground: true,
+      width: '794px',
+      height: '1123px',
+      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      timeout: 30000,
+      preferCSSPageSize: true,
+      displayHeaderFooter: false,
+    });
 
-    // Save final PDF
+    // Save result
+    const mergedPdf = await PDFDocument.load(buf);
     const finalPdf = await mergedPdf.save();
+
     const filename = `handbook-${uuidv4()}.pdf`;
     const filepath = path.join(outDir, filename);
     fs.writeFileSync(filepath, finalPdf);
@@ -181,16 +151,6 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     return { filename, filepath };
   } catch (err) {
     console.error('[PDF] CRITICAL ERROR:', err);
-
-    try {
-      if (page) {
-        fs.writeFileSync(debugPaths.errorHTML, await page.content());
-      }
-      fs.appendFileSync(debugPaths.consoleLog, `\n\nERROR: ${err.stack}`);
-      fs.appendFileSync(debugPaths.networkLog, `\n\nERROR: ${err.stack}`);
-    } catch (debugErr) {
-      console.error('[PDF] Debug save failed:', debugErr);
-    }
 
     throw err;
   } finally {
