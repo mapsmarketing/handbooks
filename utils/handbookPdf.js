@@ -108,19 +108,25 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       visible: true,
     });
 
-    // Wait for the images to load
-    // await page.evaluate(async () => {
-    //   const images = Array.from(document.images);
-    //   await Promise.all(
-    //     images.map((img) => {
-    //       if (img.complete) return;
-    //       return new Promise((resolve) => {
-    //         img.onload = img.onerror = resolve;
-    //       });
-    //     })
-    //   );
-    // });
-    // console.log('[PDF] Images loaded');
+    // Force-load all images, including those with lazy loading
+    await page.evaluate(async () => {
+      const images = Array.from(document.images);
+
+      for (const img of images) {
+        // Remove lazy-loading attribute
+        img.removeAttribute('loading');
+
+        // Set decoding to synchronous if needed
+        img.setAttribute('decoding', 'sync');
+
+        // Trigger load if not already complete
+        if (!img.complete || img.naturalHeight === 0) {
+          await new Promise((resolve) => {
+            img.onload = img.onerror = resolve;
+          });
+        }
+      }
+    });
 
     // Verify content exists
     const sections = await page.$$('#handbook-pages .type-handbook-page');
@@ -140,7 +146,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     });
 
     // Allow some time for all to render
-    await new Promise((resolve) => setTimeout(resolve, 4000));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
     // Generate one PDF for all
     const buf = await page.pdf({
