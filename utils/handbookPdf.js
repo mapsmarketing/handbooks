@@ -109,18 +109,18 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     });
 
     // Wait for the images to load
-    await page.evaluate(async () => {
-      const images = Array.from(document.images);
-      await Promise.all(
-        images.map((img) => {
-          if (img.complete) return;
-          return new Promise((resolve) => {
-            img.onload = img.onerror = resolve;
-          });
-        })
-      );
-    });
-    console.log('[PDF] Images loaded');
+    // await page.evaluate(async () => {
+    //   const images = Array.from(document.images);
+    //   await Promise.all(
+    //     images.map((img) => {
+    //       if (img.complete) return;
+    //       return new Promise((resolve) => {
+    //         img.onload = img.onerror = resolve;
+    //       });
+    //     })
+    //   );
+    // });
+    // console.log('[PDF] Images loaded');
 
     // Verify content exists
     const sections = await page.$$('#handbook-pages .type-handbook-page');
