@@ -108,13 +108,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
       visible: true,
     });
 
-    // Verify content exists
-    const sections = await page.$$('#handbook-pages .type-handbook-page');
-    if (sections.length === 0) {
-      throw new Error('No handbook sections found');
-    }
-    console.log(`[PDF] Found ${sections.length} sections`);
-
+    // Wait for the images to load
     await page.evaluate(async () => {
       const images = Array.from(document.images);
       await Promise.all(
@@ -126,6 +120,14 @@ module.exports = async function generateHandbookPdf(targetUrl) {
         })
       );
     });
+    console.log('[PDF] Images loaded');
+
+    // Verify content exists
+    const sections = await page.$$('#handbook-pages .type-handbook-page');
+    if (sections.length === 0) {
+      throw new Error('No handbook sections found');
+    }
+    console.log(`[PDF] Found ${sections.length} sections`);
 
     // Show all pages
     await page.evaluate(() => {
