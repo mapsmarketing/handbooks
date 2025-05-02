@@ -115,6 +115,18 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     }
     console.log(`[PDF] Found ${sections.length} sections`);
 
+    await page.evaluate(async () => {
+      const images = Array.from(document.images);
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return;
+          return new Promise((resolve) => {
+            img.onload = img.onerror = resolve;
+          });
+        })
+      );
+    });
+
     // Show all pages
     await page.evaluate(() => {
       const pages = document.querySelectorAll('.type-handbook-page');
