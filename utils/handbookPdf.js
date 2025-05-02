@@ -140,7 +140,7 @@ module.exports = async function generateHandbookPdf(targetUrl) {
     });
 
     // Allow some time for all to render
-    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 4000));
 
     // Generate one PDF for all
     const buf = await page.pdf({
